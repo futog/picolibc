@@ -1,7 +1,7 @@
 /*
  * SPDX-License-Identifier: BSD-3-Clause
  *
- * Copyright © 2024 Keith Packard
+ * Copyright © 2025 Keith Packard
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -33,15 +33,37 @@
  * OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "stdio_private.h"
+#ifndef _MACHINE__SSP_TLS_H_
+#define _MACHINE__SSP_TLS_H_
 
-void
-funlockfile (FILE *f)
-{
-#ifdef __STDIO_LOCKING
-    __funlockfile(f);
-#else
-    (void) f;
-    __LIBC_UNLOCK();
+#include <sys/param.h>
+
+#if !defined(__PPC__) || !defined(__THREAD_LOCAL_STORAGE_STACK_GUARD)
+#error
 #endif
-}
+
+/*
+ * PowerPC uses a thread-local variable, but located *below* the
+ * regular TLS block. There are two register-sized values. This will
+ * end up allocated in the .data segment to make sure there is space
+ * for it, then we do some pointer arithmetic using a TLS symbol
+ * created by the linker that points at the start of the .tdata
+ * segment.
+ */
+struct __stack_chk_guard {
+    uintptr_t v[2];
+}  __stack_chk_guard __section(".stack_chk");
+
+#ifdef __GNUCLIKE_PRAGMA_DIAGNOSTIC
+#pragma GCC diagnostic ignored "-Wpragmas"
+#pragma GCC diagnostic ignored "-Wunknown-warning-option"
+#pragma GCC diagnostic ignored "-Wanalyzer-out-of-bounds"
+#pragma GCC diagnostic ignored "-Warray-bounds"
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
+
+extern _Thread_local char __tls_first[];
+
+#define __stack_chk_guard       (((struct __stack_chk_guard *) __tls_first)[-1].v[0])
+
+#endif
